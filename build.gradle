@@ -6,7 +6,7 @@ repositories {
     mavenCentral()
 }
 
-def selenideVersion = "6.1.1",
+def selenideVersion = "6.2.1",
     junitVersion = "5.8.2",
     slf4jVersion = "1.7.32"
 
