@@ -6,15 +6,11 @@ repositories {
     mavenCentral()
 }
 
-def selenideVersion = "6.3.5",
-    junitVersion = "5.8.2",
-    slf4jVersion = "1.7.36"
-
 dependencies {
     testImplementation(
-            "com.codeborne:selenide:$selenideVersion",
-            "org.junit.jupiter:junit-jupiter:$junitVersion",
-            "org.slf4j:slf4j-simple:$slf4jVersion")
+            "com.codeborne:selenide:6.3.5",
+            "org.junit.jupiter:junit-jupiter:5.8.2",
+            "org.slf4j:slf4j-simple:1.7.36")
 }
 
 tasks.withType(JavaCompile) {
