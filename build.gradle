@@ -8,8 +8,8 @@ repositories {
 
 dependencies {
     testImplementation (
-            "com.codeborne:selenide:6.3.5",
-            "org.junit.jupiter:junit-jupiter:5.8.2")
+            "com.codeborne:selenide:6.11.2",
+            "org.junit.jupiter:junit-jupiter:5.9.2")
 }
 
 tasks.withType(JavaCompile) {
