@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login Form</title>
+  <style>
+    body { font-family: Arial, sans-serif; background-color: #f2f2f2; margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
+    .header { width: 100%; display: flex; justify-content: flex-end; padding: 10px 20px; background-color: #4CAF50; color: white; position: fixed; top: 0; }
+    .login-container { background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); width: 300px; margin-top: 60px; display: flex; flex-direction: column; }
+    .input-group { margin-bottom: 15px; }
+    .input-group input, .input-group button { width: 100%; padding: 8px; box-sizing: border-box; }
+    .input-group button { background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    .input-group button:hover { background-color: #45a049; }
+    .message { text-align: center; height: 20px; margin-top: 15px; transition: opacity 0.3s; }
+    .message.error { color: red; }
+    .message.success { color: green; }
+  </style>
+</head>
+<body>
+
+<div class="header"><span class="greeting" id="greeting"></span><button id="logoutButton" onclick="logout()" style="display: none;">Logout</button></div>
+<div class="login-container" id="loginContainer">
+  <h2>Login</h2>
+  <div class="input-group"><label for="username">Username</label><input type="text" id="username" required></div>
+  <div class="input-group"><label for="password">Password</label><input type="password" id="password" required></div>
+  <div class="input-group"><button id="loginButton" onclick="login()">Login</button></div>
+  <div class="message" id="message"></div>
+</div>
+
+<script>
+  document.querySelectorAll('#username, #password').forEach(input => input.addEventListener('keydown', function(event) {
+    if (event.key === 'Enter') { event.preventDefault(); login(); }
+  }));
+
+  function showMessage(text, type) {
+    const messageElement = document.getElementById('message');
+    messageElement.className = `message ${type}`;
+    messageElement.innerHTML = text;
+  }
+
+  function login() {
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value.trim();
+
+    if (!username || !password) {
+      showMessage(!username && !password ? 'Username and Password are required.' : !username ? 'Username is required.' : 'Password is required.', 'error');
+      return;
+    }
+
+    if (username === 'admin' && password === 'admin') {
+      showMessage('Login successful!', 'success');
+      setTimeout(() => {
+        document.getElementById('loginContainer').style.display = 'none';
+        document.getElementById('greeting').innerHTML = `Welcome, ${username}!`;
+        document.getElementById('logoutButton').style.display = 'inline-block';
+      }, 1000);
+    } else {
+      showMessage('Invalid username or password.', 'error');
+    }
+  }
+
+  function logout() {
+    document.getElementById('loginContainer').style.display = 'flex';
+    document.getElementById('greeting').innerHTML = '';
+    document.getElementById('logoutButton').style.display = 'none';
+    document.getElementById('message').className = 'message';
+    document.getElementById('message').innerHTML = '';
+    document.getElementById('username').value = '';
+    document.getElementById('password').value = '';
+  }
+</script>
+
+</body>
+</html>
