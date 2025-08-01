@@ -9,7 +9,6 @@ repositories {
 dependencies {
     testImplementation (
             "com.codeborne:selenide:6.19.1",
-            "com.microsoft.playwright:playwright:1.43.0",
             "org.junit.jupiter:junit-jupiter:5.9.3")
 }
 
