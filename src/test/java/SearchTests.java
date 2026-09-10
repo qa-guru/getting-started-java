@@ -6,6 +6,7 @@ import static com.codeborne.selenide.Condition.visible;
 import static com.codeborne.selenide.Selenide.*;
 
 public class SearchTests {
+
     @Test
     @Disabled("Get anti-captcha from developers, issue: @Jira-52343")
     void successfulSearchTest() {
@@ -13,7 +14,6 @@ public class SearchTests {
         $("[name=q]").setValue("selenide").pressEnter();
         $("[id=search]").shouldHave(text("https://selenide.org"));
     }
-
 
     @Test
     void captchaShouldBeShownTest() {
