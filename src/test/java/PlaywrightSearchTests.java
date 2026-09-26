@@ -10,16 +10,18 @@ public class PlaywrightSearchTests {
 
     @Test
     void successfulSearchTest() {
-        Playwright playwright = Playwright.create();
-        Browser browser = playwright.chromium().launch(
-                new BrowserType.LaunchOptions().setHeadless(false));
-        Page page = browser.newPage();
+        try (Playwright playwright = Playwright.create()) {
+            Browser browser = playwright.chromium().launch(
+                    new BrowserType.LaunchOptions().setHeadless(false));
+            Page page = browser.newPage();
 
-        page.navigate("https://www.google.com/");
+            page.navigate("https://github.com/search");
+            page.locator("[aria-label='Search GitHub']").fill("qa.guru");
+            page.locator("[aria-label='Search GitHub']").press("Enter");
 
-        page.locator("[name=q]").fill("selenide");
-        page.locator("[name=q]").press("Enter");
+            assertThat(page.locator("[data-testid='results-list']")).containsText("QA.GURU");
 
-        assertThat(page.locator("#search")).containsText("https://selenide.org");
+            browser.close();
+        }
     }
 }
