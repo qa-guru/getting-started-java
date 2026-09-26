@@ -7,9 +7,10 @@ repositories {
 }
 
 dependencies {
-    testImplementation (
-            "com.codeborne:selenide:6.11.2",
-            "org.junit.jupiter:junit-jupiter:5.9.2")
+    testImplementation(
+            "com.codeborne:selenide:7.18.2",
+            "org.junit.jupiter:junit-jupiter:6.1.3")
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 }
 
 tasks.withType(JavaCompile) {
