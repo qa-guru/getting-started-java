@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="SearchTests" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-09-26T03:10:46.738Z" hostname="MacBook-Pro-Stanislav.local" time="2.26">
+  <properties/>
+  <testcase name="successfulSearchTest()" classname="SearchTests" time="2.255"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[[Test worker] INFO com.codeborne.selenide.WebDriverThreadLocalContainer - No webdriver is bound to current thread: 1 - let's create a new webdriver
+Sep 26, 2026 5:10:47 AM org.openqa.selenium.devtools.CdpVersionFinder findNearestMatch
+WARNING: Unable to find an exact match for CDP version 154, returning the closest version; found: 153; Please update to a Selenium version that supports CDP version 154
+[Test worker] INFO com.codeborne.selenide.webdriver.WebDriverFactory - Selenide 7.18.2 / Selenium 4.49.0 / chrome 154.0.8037.58 mac
+[Test worker] WARN com.codeborne.selenide.impl.BiDiUti - Failed to use BiDi to collect browser logs: org.openqa.selenium.bidi.BiDiException: Unable to create a BiDi connection
+Build info: version: '4.49.0', revision: 'bedb24f bedb24f6f703876e7e4c5d506f0d697eb358c720'
+System info: os.name: 'Mac OS X', os.arch: 'aarch64', os.version: '27.2', java.version: '21.0.9'
+Driver info: BiDi Connection
+]]></system-err>
+</testsuite>
