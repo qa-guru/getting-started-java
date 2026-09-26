@@ -2,15 +2,14 @@ package pages;
 
 import com.codeborne.selenide.SelenideElement;
 
-import static com.codeborne.selenide.Selectors.byName;
 import static com.codeborne.selenide.Selenide.$;
 import static com.codeborne.selenide.Selenide.open;
 
 public class MainPage {
-    SelenideElement searchInput = $(byName("q"));
+    SelenideElement searchInput = $("[aria-label='Search GitHub']");
 
     public MainPage openPage() {
-        open("https://www.google.com/");
+        open("https://github.com/search");
 
         return this;
     }
