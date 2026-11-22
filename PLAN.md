@@ -211,3 +211,41 @@ GitHub не уложилась в `pageLoadTimeout` (30 с).
 |---|---|
 | `shouldHaveResult("NO_SUCH_TEXT_XYZ")` после поиска `qa.guru` | ❌ `ElementShould`: «Element should have text» на `results-list` — ожидаемо |
 | `shouldBeEmpty()` после поиска `repo:selenide/selenide` | ❌ `ElementNotFound`: `h3.findBy(text "Your search did not match…")` — падает на первой проверке, ожидаемо |
+
+## Фаза 4 — Allure-отчёты ✅
+
+### Два слоя — разные версии
+
+| Слой | Что | Версия | Почему |
+|---|---|---|---|
+| JVM-адаптеры (пишут `allure-results`) | `allure-jupiter`, `allure-selenide` через `allure-bom` | **3.1.1** | `allure-jupiter` → `allure-junit-platform:3.1.1`, собран под **JUnit 6.1.0** (у нас 6.1.3). `allure-junit5` — старая линия 2.x (последняя 2.35.6, собрана под JUnit 5.10 / Platform 1.10), не подходит. `allure-selenide` не тянет свою Selenide — используется наша 7.18.2, совместимость подтверждена прогоном |
+| CLI-генератор (собирает HTML) | Allure Report 2 commandline (brew) | **2.46.1** | Стандартный Allure-плагин Jenkins (фаза 7) работает с commandline Report 2; уже установлен, не требует node/npm. Allure Report 3 (npm `allure@3.33.0`) — другой инструмент с другими командами |
+
+### Решения
+
+- **Шаги — `@Step` + `-javaagent:aspectjweaver:1.9.27`.** Шаги на методах Page Object
+  (`Open GitHub search`, `Search for "{query}"`, `Results should be empty`, …). Агент подключается
+  в задаче `test` из отдельной конфигурации `aspectjAgent` (не попадает в classpath).
+  Без weaving `@Step` молча не работает — наличие шагов проверено в результатах.
+- **`AllureSelenide`** с дефолтами: действия Selenide — вложенные шаги, при падении — Screenshot + Page source.
+  Регистрируется в `TestBase.@BeforeEach` по имени (без дублей).
+- **Результаты** — `build/allure-results` (`src/test/resources/allure.properties`).
+  Задача `test` очищает каталог перед запуском — прогоны не смешиваются.
+
+### Команды
+
+```bash
+./gradlew test
+allure generate --clean -o build/allure-report build/allure-results   # флаги — по `allure --help` 2.46.1
+allure open build/allure-report
+```
+
+### Проверка
+
+| Проверка | Результат |
+|---|---|
+| Очистка: подложен `STALE-old-run-result.json` перед прогоном | удалён; в `allure-results` ровно 3 `result.json` |
+| Зелёный прогон → отчёт | ✅ total 3, passed 3; в каждом тесте шаги `@Step` с вложенными шагами Selenide `$(...)` |
+| Контролируемое падение (`shouldHaveResult("NO_SUCH_TEXT_XYZ")`) | `successfulSearchTest` — **failed**, причина «Element should have text…», failed step `Results should contain "NO_SUCH_TEXT_XYZ"` → вложенный `$(...)` failed, вложения Screenshot (png) + Page source (html). Отчёт: `build/allure-report-failed` (failed 1, broken 1, passed 1) |
+| Попутно: сетевой тайм-аут `open()` в `searchByRepoQualifierOpensRepository` | в отчёте **broken** с тем же набором вложений — сетевые сбои отличимы от падений проверок |
+| Assertion восстановлен (diff с `803380a` пуст), финальный прогон | ✅ total 3, passed 3; вложений прошлого прогона нет |
