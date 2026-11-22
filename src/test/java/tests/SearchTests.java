@@ -11,7 +11,7 @@ public class SearchTests extends TestBase {
     void successfulSearchTest() {
         searchPage.open()
                 .searchFor("qa.guru")
-                .shouldHaveResult("QA.GURU");
+                .shouldHaveResult("БЛА БЛА БЛА");
     }
 
     @Test
