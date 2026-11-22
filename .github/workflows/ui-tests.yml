@@ -156,3 +156,23 @@ jobs:
           path: build/allure-report/
           retention-days: 14
           if-no-files-found: error
+
+      # Runs for success, test failure and build errors; not for cancelled runs (superseded by a newer push).
+      # continue-on-error: a Telegram problem is reported as a warning and never changes the job status,
+      # so a test failure stays a failure and a green run stays green.
+      - name: Notify Telegram
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 2
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          CI_NAME: GitHub Actions
+          PROJECT_NAME: ${{ github.repository }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BUILD_OUTCOME: ${{ steps.compile.outcome }}
+          TESTS_OUTCOME: ${{ steps.tests.outcome }}
+          JUNIT_RESULTS_DIR: build/test-results/test
+        run: java ci/TelegramNotifier.java

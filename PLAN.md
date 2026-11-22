@@ -302,3 +302,80 @@ Workflow: `.github/workflows/ui-tests.yml`, hosted runner `ubuntu-24.04`, без
 Временные ветки получали триггер `ci-check/**` только в своей копии workflow; обе удалены
 (локально и на GitHub). Логи и содержимое артефактов не скачивались: `gh` не авторизован, а API
 отдаёт их только с токеном — проверено по статусам шагов и размерам артефактов.
+
+## Фаза 6 — Уведомления в Telegram (⏳ реальная отправка — после добавления секретов)
+
+### Согласованные решения
+
+- **Реализация:** `ci/TelegramNotifier.java` — single-file Java-программа без зависимостей
+  (`java ci/TelegramNotifier.java`), переиспользуется в Jenkins (фаза 7). JDK: XML-парсер + `HttpClient`.
+- **Из каких CI:** GitHub Actions (шаг `Notify Telegram`), далее Jenkins.
+- **Исходы:**
+
+| Исход | Уведомление |
+|---|---|
+| все тесты прошли | ✅ PASSED |
+| есть failure / error, или XML зелёный, но шаг тестов упал | ❌ FAILED |
+| ошибка компиляции / шаги до тестов упали (`BUILD_OUTCOME` ≠ success) | 🛑 BUILD ERROR — tests did not run (даже если лежит старый зелёный XML) |
+| нет XML, битый XML, 0 тестов, все skipped | ⚠️ NO TEST RESULTS |
+| отмена (новый push отменил старый run) | не отправляется (`if: !cancelled()`) |
+
+- **Secrets:** `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` — только из окружения; не печатаются, токен и chat id
+  вырезаются из любых текстов ошибок (`sanitize`). Нет секретов → `::warning::` «skipped», exit 0.
+- **Ошибки API:** успех = HTTP 2xx **и** `"ok": true`; иначе exit 1 + warning с кодом и `description`.
+  Таймауты: connect 10 с, запрос 15 с (`TELEGRAM_TIMEOUT_SECONDS`), шаг — `timeout-minutes: 2`.
+  Шаг — `continue-on-error: true`: статус job определяют только тесты.
+- **Статистика — из JUnit XML** Gradle (`build/test-results/test/TEST-*.xml`, формат сверен с реальным файлом):
+  считаются элементы `<testcase>` во всех файлах (не атрибуты `<testsuite>` → вложенные suite не дублируются);
+  failed = `<failure>`, errors = `<error>`, skipped = `<skipped>`. XML парсится с запретом DOCTYPE (XXE).
+
+Сообщение (plain text):
+```
+✅ PASSED — AlinaKotlyarova/getting-started-java
+CI: GitHub Actions
+Branch: homework @ a33b300
+Tests: 3 total · 3 passed · 0 failed · 0 skipped
+Run: https://github.com/AlinaKotlyarova/getting-started-java/actions/runs/…
+```
+
+### Проверка без реальной отправки
+
+`./gradlew notifierTest` — отдельный source set, JUnit + mock HTTP-сервер (`com.sun.net.httpserver`),
+адрес API подменяется `TELEGRAM_API_URL`. **19/19 ✅.** Каждый тест дополнительно проверяет, что токен и chat id
+не попали в вывод.
+
+| Группа | Сценарии |
+|---|---|
+| Статистика | success, failure, error, skipped, несколько файлов + вложенные `<testsuites>` (5 тестов, а не 11 по атрибутам) |
+| Нет результатов | XML отсутствует, битый XML (без `[Fatal Error]` в выводе), 0 тестов, все skipped |
+| До тестов | ошибка компиляции при старом зелёном XML → BUILD ERROR; шаги до компиляции skipped → BUILD ERROR; зелёный XML + упавший шаг тестов → FAILED |
+| Отправка | нет секретов (запроса нет, exit 0), HTTP 500, HTTP 400 `ok=false` + description, HTTP 200 `ok=false`, timeout (1 с, укладывается < 3.5 с), connection refused |
+| Утечки | токен с пробелом → `URI.create` кладёт URL с токеном в текст исключения — вырезается. **Мутационная проверка:** с отключённым `sanitize` этот тест падает |
+
+Запуск как single-file программы без секретов на реальном XML: текст сформирован, warning «skipped», exit 0.
+
+### Проверка в GitHub Actions: ошибка уведомления не маскирует статус
+
+Временные ветки с поддельным токеном и `TELEGRAM_API_URL=http://127.0.0.1:9` (закрытый порт) — в Telegram ничего не уходит:
+
+| Ветка | Run | Тесты | Notify Telegram | Job |
+|---|---|---|---|---|
+| `ci-check/notify-error-on-success` | 45041584245 | success | exit 1, warning «Telegram notification failed: ConnectException» | ✅ success |
+| `ci-check/notify-error-on-failure` | 45041583811 | failure | exit 1, тот же warning | ❌ failure (от тестов) |
+
+Нюанс: при `continue-on-error` API показывает `conclusion: success` у самого шага — фактическое падение видно
+по annotations (`Process completed with exit code 1` + warning). Временные ветки удалены.
+
+Инцидент при проверке: первый push временных веток ушёл без файлов нотификатора (zsh не разбил список путей
+в переменной для `git add`). Обнаружено до анализа результатов, ветки пересозданы в отдельных worktree
+с явными путями и перезапушены, рабочая копия `homework` восстановлена и сверена.
+
+### Осталось
+
+- Реальная отправка: после добавления секретов в репозиторий и согласования — сверить фактическое сообщение.
+
+### Найдено попутно (к фазе 5)
+
+В stderr тестов: «Unable to find an exact match for CDP version 157 … found: 153» — Selenium 4.49 поддерживает
+CDP до 153, локальный Chrome — 157. Тесты не затронуты (Selenide не использует CDP для базовых действий),
+но это расхождение «браузер ↔ поддержка CDP», которое фаза 5 просила отслеживать.

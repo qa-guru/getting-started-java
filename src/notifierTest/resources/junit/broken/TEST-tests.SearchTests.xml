@@ -1,0 +1,3 @@
+<?xml version="1.0"?>
+<testsuite name="tests.SearchTests" tests="1">
+  <testcase name="a()"

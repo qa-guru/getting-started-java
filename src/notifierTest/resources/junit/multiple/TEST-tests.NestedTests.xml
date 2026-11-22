@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="3" failures="0" errors="1" skipped="1">
+  <testsuite name="tests.NestedTests" tests="3" failures="0" errors="1" skipped="1">
+    <testsuite name="tests.NestedTests$Inner" tests="3" failures="0" errors="1" skipped="1">
+      <testcase name="c()" classname="tests.NestedTests$Inner" time="1.0"/>
+      <testcase name="d()" classname="tests.NestedTests$Inner" time="1.0"><error message="e" type="RuntimeException">e</error></testcase>
+      <testcase name="e()" classname="tests.NestedTests$Inner" time="0.0"><skipped/></testcase>
+    </testsuite>
+  </testsuite>
+</testsuites>
