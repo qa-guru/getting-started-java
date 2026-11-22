@@ -74,3 +74,48 @@ BUILD SUCCESSFUL
 - Добавить `.idea/` в `.gitignore`.
 - Пробрасывать `-D` свойства (браузер, прокси, remote) из Gradle в тесты.
 - Явно задать Java toolchain 21 в `build.gradle`.
+
+## Фаза 1 — TestBase и воспроизводимость ✅
+
+### Что сделано
+
+- **Gradle Wrapper** пересоздан штатной командой с проверкой официального SHA-256
+  (взят с `https://services.gradle.org/distributions/gradle-9.8.2-bin.zip.sha256`):
+  ```
+  gradle wrapper --gradle-version 9.8.2 --distribution-type bin \
+    --gradle-distribution-sha256-sum 21bd5da2de49b642904077f38c0efdc7778e92b3ed0889392dca61b97e389607
+  ```
+  В `gradle-wrapper.properties` появился `distributionSha256Sum`.
+- **Java toolchain 21** в `build.gradle`. Сборка не зависит от `JAVA_HOME` и `java` в PATH.
+- **Явная передача параметров** из Gradle в тестовую JVM: только `baseUrl`, `browser`, `browserSize`,
+  `headless` и только если заданы. Остальные `-D` в тесты не попадают. Значения — входы задачи `test`,
+  поэтому смена `-D` перезапускает тесты (не UP-TO-DATE).
+- **`TestBase`**: `@BeforeEach` настраивает Selenide (`@BeforeAll` не используется: он срабатывает
+  на каждый класс, а не один раз на JVM), `@AfterEach` вызывает `Selenide.closeWebDriver()`.
+  Итоговая конфигурация печатается в stdout теста (видна в отчёте).
+- `SearchTests extends TestBase`, `open("/search")` относительно `baseUrl`.
+
+### Параметры
+
+| `-D` | По умолчанию |
+|---|---|
+| `baseUrl` | `https://github.com` |
+| `browser` | `chrome` |
+| `browserSize` | `1920x1080` |
+| `headless` | `false` |
+
+Пример: `./gradlew test -Dheadless=true -DbrowserSize=1280x800`
+
+### Проверка
+
+Все запуски с `JAVA_HOME` не заданным, `java` в PATH — 27, Chrome без прокси
+(`JAVA_TOOL_OPTIONS=-Dchromeoptions.args=--no-proxy-server`, только локально, в код не входит).
+Для проверки закрытия браузера в `@AfterEach` временно выводились `hasWebDriverStarted()` и число
+дочерних процессов chromedriver/Chrome; диагностика удалена.
+
+| Запуск | Результат | Конфигурация в тестовой JVM | Браузер после `closeWebDriver()` |
+|---|---|---|---|
+| defaults | ✅ PASSED | `github.com, chrome, 1920x1080, headless=false`, `java.version=21.0.13` | started=false, процессов 0 (было 8) |
+| `-DbrowserSize=1280x800 -Dheadless=true -DbaseUrl=… -Dbrowser=chrome -Dfoo=bar` | ✅ PASSED | `github.com, chrome, 1280x800, headless=true`; `foo=null` (отфильтрован) | started=false, процессов 0 |
+| контролируемое падение (`text("NO_SUCH_TEXT_XYZ")`) | ❌ FAILED, `ElementShould` на строке 12 — ожидаемо | defaults | started=false, процессов 0; chromedriver после прогона: 0 |
+| финальный, исходный assertion восстановлен | ✅ PASSED (3.8s) | defaults | — |

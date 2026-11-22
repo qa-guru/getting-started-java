@@ -6,6 +6,12 @@ repositories {
     mavenCentral()
 }
 
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
 dependencies {
     testImplementation(
             "com.codeborne:selenide:7.18.2",
@@ -17,6 +23,16 @@ tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
 
+// Only these -D properties are forwarded from the Gradle launcher to the test JVM.
+def forwardedTestProperties = ['baseUrl', 'browser', 'browserSize', 'headless']
+
 test {
     useJUnitPlatform()
+
+    forwardedTestProperties.each { name ->
+        def value = providers.systemProperty(name)
+        if (value.present) {
+            systemProperty name, value.get()
+        }
+    }
 }
