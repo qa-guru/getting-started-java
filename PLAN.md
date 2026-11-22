@@ -176,3 +176,38 @@ GitHub не уложилась в `pageLoadTimeout` (30 с).
   `load` ≈ `DOMContentLoaded`, медленных ресурсов в норме нет. `pageLoadStrategy=eager` не поможет.
 - Вывод: внешний сетевой фактор (канал до github.com / githubassets.com, вероятно, корпоративная сеть).
   Не повод для ретраев. Повторить проверку в другой сети или в CI (фаза 7).
+
+## Фаза 3 — Page Object ✅
+
+### Согласованный стиль
+
+- Fluent API: методы возвращают `this` или следующую страницу.
+- Проверки — только в `should…`-методах страниц; имена остальных методов — действия пользователя.
+- Локаторы — `private final SelenideElement`-поля (ленивые, безопасно объявлять полями).
+- Компонентов нет: повторяющихся блоков в тестах нет.
+
+### Структура
+
+| Класс | Методы |
+|---|---|
+| `pages.SearchPage` | `open()`, `openRepositoriesSearch()`, `searchFor(query)` → `SearchResultsPage` |
+| `pages.SearchResultsPage` | `shouldHaveResult(text)`, `shouldBeEmpty()`, `openRepository(fullName)` → `RepositoryPage` |
+| `pages.RepositoryPage` | `shouldBeOpened(owner, name)` |
+| `tests.TestBase`, `tests.SearchTests` | перенесены из корня в package `tests` |
+
+Нюанс: в `SearchPage` вызывается `Selenide.open(...)` явно — собственный метод `open()` скрывает
+статический импорт `open` с тем же именем, и `open("/search")` не скомпилировался бы.
+
+### Проверка
+
+- **Семантика.** Локаторы, условия и порядок проверок построчно сверены с `f19309e` — совпадают.
+  Локатор ссылки `"[data-testid='results-list'] a[href='/" + fullName + "']"` при `selenide/selenide`
+  даёт прежнюю строку. В `shouldBeEmpty()` порядок сохранён: сначала заглушка `visible`, потом `shouldNot(exist)`.
+- **Прогон `tests.SearchTests`** (`--rerun`): ✅ 3/3 — `impossibleStarsFilterShowsEmptyState` 12.9 с,
+  `successfulSearchTest` 47.4 с, `searchByRepoQualifierOpensRepository` 6.1 с (разброс времени — сеть, см. фазу 2).
+- **Контрольные падения** (временный класс, удалён):
+
+| Сценарий | Результат |
+|---|---|
+| `shouldHaveResult("NO_SUCH_TEXT_XYZ")` после поиска `qa.guru` | ❌ `ElementShould`: «Element should have text» на `results-list` — ожидаемо |
+| `shouldBeEmpty()` после поиска `repo:selenide/selenide` | ❌ `ElementNotFound`: `h3.findBy(text "Your search did not match…")` — падает на первой проверке, ожидаемо |
