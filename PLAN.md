@@ -249,3 +249,56 @@ allure open build/allure-report
 | Контролируемое падение (`shouldHaveResult("NO_SUCH_TEXT_XYZ")`) | `successfulSearchTest` — **failed**, причина «Element should have text…», failed step `Results should contain "NO_SUCH_TEXT_XYZ"` → вложенный `$(...)` failed, вложения Screenshot (png) + Page source (html). Отчёт: `build/allure-report-failed` (failed 1, broken 1, passed 1) |
 | Попутно: сетевой тайм-аут `open()` в `searchByRepoQualifierOpensRepository` | в отчёте **broken** с тем же набором вложений — сетевые сбои отличимы от падений проверок |
 | Assertion восстановлен (diff с `803380a` пуст), финальный прогон | ✅ total 3, passed 3; вложений прошлого прогона нет |
+
+## Фаза 5 — GitHub Actions ✅
+
+Workflow: `.github/workflows/ui-tests.yml`, hosted runner `ubuntu-24.04`, без Selenoid.
+
+### Согласованные решения
+
+- **События:** `push` в `master`/`homework`, `pull_request` в `master` (не `pull_request_target`:
+  код fork PR не получает секретов и write-токена), `workflow_dispatch`. Push-триггер заодно
+  гарантирует регистрацию workflow — подтверждено через API: `UI tests`, state `active`.
+- **Артефакты, без GitHub Pages:** `junit-xml`, `allure-results` (с вложениями), `allure-report`, хранение 14 дней.
+- **Параметры `workflow_dispatch`:** `baseUrl`, `browserSize`, `timeout`. В CI всегда `headless=true`, `browser=chrome`.
+  Inputs передаются в shell через `env`, а не подстановкой `${{ }}` в `run` (защита от инъекций).
+
+### Подготовка окружения (явная)
+
+| Что | Как |
+|---|---|
+| Java 21 | `actions/setup-java` (temurin) |
+| Gradle | `gradle/actions/setup-gradle`, `cache-provider: basic` (по умолчанию — коммерческий `enhanced`); валидирует wrapper jar |
+| Chrome + ChromeDriver | `browser-actions/setup-chrome`, `stable` + `install-chromedriver`; отдельный шаг сверяет `MAJOR.MINOR.BUILD` Chrome и ChromeDriver (совместимость CDP) и падает при расхождении |
+| Allure CLI 2.46.1 | zip с Maven Central, проверка `sha256sum --check` по зашитому хешу |
+
+Путь к Chrome, к драйверу и флаги Chrome передаются в тесты явно: в список проброса Gradle добавлены
+`selenide.browserBinary`, `webdriver.chrome.driver`, `chromeoptions.args` (локально теперь
+`-Dchromeoptions.args=--no-proxy-server` вместо `JAVA_TOOL_OPTIONS`).
+
+### Безопасность
+
+- Все actions закреплены по commit SHA (у annotated-тегов — peeled-коммит):
+  `checkout` v7.0.1, `setup-java` v6.3.0, `setup-gradle` v6.4.1, `setup-chrome` v2.2.0, `upload-artifact` v7.0.2.
+- `permissions: contents: read`, `persist-credentials: false`, секретов нет.
+- **`--no-sandbox` — осознанный компромисс только для CI.** На Ubuntu 24.04 ограничены user namespaces,
+  нужные sandbox Chrome. Риск: эксплойт в рендерере не изолирован от процесса браузера. Принимаем,
+  т.к. VM раннера одноразовая, секретов в job нет, тесты открывают только целевой сайт. Локально флаг не используется.
+
+### Логика статусов
+
+- `Compile tests` (`./gradlew testClasses`) — отдельный шаг: ошибка компиляции падает тут, тесты и отчёт пропускаются.
+- `Check test results exist` — если нет ни одного Allure-результата или JUnit XML, шаг падает: «0 тестов» ≠ успех.
+- Отчёт и загрузка артефактов — `if: always()` + результаты есть; job при этом остаётся failure от шага тестов.
+
+### Проверка на реальном GitHub
+
+| Ветка | Run | Итог | Шаги | Артефакты |
+|---|---|---|---|---|
+| `homework` | 45035148592 | ✅ success | все 13 шагов success | allure-report 1.1 MB, junit-xml 1.6 KB, allure-results 3 KB |
+| `ci-check/test-failure` (temp, `shouldHaveResult("NO_SUCH_TEXT_XYZ")`) | 45035392881 | ❌ failure | `Run UI tests` failure → проверка результатов, отчёт, 3 загрузки — success | allure-report 1.4 MB, junit-xml 3.8 KB, **allure-results 227 KB** (скриншот + page source) |
+| `ci-check/compile-error` (temp, пропущена `;`) | 45035392605 | ❌ failure | `Compile tests` failure → остальные 6 шагов skipped | нет — отчёт не генерируется |
+
+Временные ветки получали триггер `ci-check/**` только в своей копии workflow; обе удалены
+(локально и на GitHub). Логи и содержимое артефактов не скачивались: `gh` не авторизован, а API
+отдаёт их только с токеном — проверено по статусам шагов и размерам артефактов.
