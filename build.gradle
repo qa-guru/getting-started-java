@@ -24,7 +24,7 @@ tasks.withType(JavaCompile) {
 }
 
 // Only these -D properties are forwarded from the Gradle launcher to the test JVM.
-def forwardedTestProperties = ['baseUrl', 'browser', 'browserSize', 'headless']
+def forwardedTestProperties = ['baseUrl', 'browser', 'browserSize', 'headless', 'timeout']
 
 test {
     useJUnitPlatform()

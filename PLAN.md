@@ -119,3 +119,60 @@ BUILD SUCCESSFUL
 | `-DbrowserSize=1280x800 -Dheadless=true -DbaseUrl=… -Dbrowser=chrome -Dfoo=bar` | ✅ PASSED | `github.com, chrome, 1280x800, headless=true`; `foo=null` (отфильтрован) | started=false, процессов 0 |
 | контролируемое падение (`text("NO_SUCH_TEXT_XYZ")`) | ❌ FAILED, `ElementShould` на строке 12 — ожидаемо | defaults | started=false, процессов 0; chromedriver после прогона: 0 |
 | финальный, исходный assertion восстановлен | ✅ PASSED (3.8s) | defaults | — |
+
+## Фаза 2 — Ещё два теста ✅ (с известным внешним ограничением)
+
+### Разведка в реальном UI (до написания кода)
+
+Временным probe-тестом (headless, удалён) проверено:
+
+- `repo:selenide/selenide`, введённый на `/search`, GitHub открывает **во вкладке Issues** (`type=issues`).
+  Если сначала открыть `/search?type=repositories`, тип сохраняется. Вкладки Repositories для
+  `repo:`-запросов в фасетах нет, поэтому переключаться через неё нельзя.
+- Семантика `stars:` проверена на одном репозитории (1.9k звёзд): `stars:>=0` и `stars:>100` → найден,
+  `stars:<0` → не найден. Это квалификатор, а `<0` логически невозможен (не «очень большое число»).
+- Empty state: `h3` «Your search did not match any repositories» (класс хешированный → ищем по тексту),
+  `[data-testid='results-list']` отсутствует.
+- Ссылка на результат: `a[href='/selenide/selenide']`, после клика URL `https://github.com/selenide/selenide`,
+  `#repo-title-component` = «selenide Public».
+
+### Тесты (`SearchTests`)
+
+| Тест | Сценарий | Почему детерминирован |
+|---|---|---|
+| `searchByRepoQualifierOpensRepository` | `/search?type=repositories` → `repo:selenide/selenide` → клик по `a[href='/selenide/selenide']` → URL `baseUrl/selenide/selenide`, заголовок «selenide» | `repo:` даёт один репозиторий; ссылка ищется по href, не по позиции |
+| `impossibleStarsFilterShowsEmptyState` | `/search?type=repositories` → `stars:<0` → видим empty state → `results-list` не существует | звёзд < 0 не бывает; `shouldNot(exist)` проверяется после появления empty state |
+
+Только ожидания Selenide, без `sleep`, без числа результатов и порядка выдачи.
+
+Добавлен параметр `-Dtimeout` (мс, по умолчанию `10000`) → `Configuration.timeout`: React-поиск GitHub
+на медленной сети рендерится дольше дефолтных 4 с Selenide. Ретраев нет.
+
+### Проверка
+
+Прогоны с паузой 20 с, `--rerun` (иначе Gradle отдаёт UP-TO-DATE результат), Chrome без прокси.
+
+Серия 1 (`timeout` = 4 с по умолчанию Selenide) — 11 прогонов, 3 падения: 2× `TimeoutException` в `open()`,
+1× `NoSuchElementException` поля поиска (на скриншоте — незагруженный skeleton страницы). HTTP 429 не было
+(совпадения «429» в HTML — данные SVG-иконок).
+
+Серия 2 (`timeout` = 10 с):
+
+| Прогон | Обычный режим | Headless |
+|---|---|---|
+| `successfulSearchTest` | ❌ `TimeoutException` в `open()` (31 с) | ✅ 13.9 с |
+| `searchByRepoQualifierOpensRepository` | ❌ `TimeoutException` в `open()` (51 с) | ✅ 5.0 с |
+| `impossibleStarsFilterShowsEmptyState` | ✅ 4.3 с | ✅ 3.7 с |
+| Весь набор | ✅ 3.7 / 3.7 / 5.9 с | ✅ 3.4 / 3.5 / 6.7 с (`-Dtimeout=15000` дошёл в JVM) |
+
+**Ни одна проверка (`shouldHave`, `url`, empty state) не упала.** Все падения — загрузка страницы
+GitHub не уложилась в `pageLoadTimeout` (30 с).
+
+### Известное ограничение: нестабильная сеть до GitHub
+
+- Время одного и того же теста колеблется от 3 до 59 с; падения случаются на разных тестах,
+  в обоих режимах, на `open()`.
+- Гипотеза о зависающих сторонних ресурсах **не подтвердилась**: замер Performance API показал
+  `load` ≈ `DOMContentLoaded`, медленных ресурсов в норме нет. `pageLoadStrategy=eager` не поможет.
+- Вывод: внешний сетевой фактор (канал до github.com / githubassets.com, вероятно, корпоративная сеть).
+  Не повод для ретраев. Повторить проверку в другой сети или в CI (фаза 7).
