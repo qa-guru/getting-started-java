@@ -250,7 +250,7 @@ allure open build/allure-report
 | Попутно: сетевой тайм-аут `open()` в `searchByRepoQualifierOpensRepository` | в отчёте **broken** с тем же набором вложений — сетевые сбои отличимы от падений проверок |
 | Assertion восстановлен (diff с `803380a` пуст), финальный прогон | ✅ total 3, passed 3; вложений прошлого прогона нет |
 
-## Фаза 5 — GitHub Actions ✅
+## Фаза 5 — GitHub Actions
 
 Workflow: `.github/workflows/ui-tests.yml`, hosted runner `ubuntu-24.04`, без Selenoid.
 

@@ -158,11 +158,11 @@ jobs:
           if-no-files-found: error
 
       # Runs for success, test failure and build errors; not for cancelled runs (superseded by a newer push).
-      # continue-on-error: a Telegram problem is reported as a warning and never changes the job status,
-      # so a test failure stays a failure and a green run stays green.
+      # No continue-on-error: a broken notification (bad token, API error) fails the job visibly instead of
+      # hiding behind a warning. It runs last, so a test failure is still the first failed step and is never
+      # masked. Missing secrets (e.g. fork PRs) are not an error: the notifier skips with exit 0.
       - name: Notify Telegram
         if: ${{ !cancelled() }}
-        continue-on-error: true
         timeout-minutes: 2
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
