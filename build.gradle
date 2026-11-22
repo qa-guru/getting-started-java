@@ -37,7 +37,11 @@ tasks.withType(JavaCompile) {
 }
 
 // Only these -D properties are forwarded from the Gradle launcher to the test JVM.
-def forwardedTestProperties = ['baseUrl', 'browser', 'browserSize', 'headless', 'timeout']
+def forwardedTestProperties = [
+        'baseUrl', 'browser', 'browserSize', 'headless', 'timeout',
+        // browser binary / driver / extra Chrome flags (CI: explicit Chrome + ChromeDriver, --no-sandbox)
+        'selenide.browserBinary', 'webdriver.chrome.driver', 'chromeoptions.args',
+]
 
 test {
     useJUnitPlatform()

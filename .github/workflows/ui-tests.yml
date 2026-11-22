@@ -1,0 +1,158 @@
+name: UI tests
+
+on:
+  push:
+    branches: [master, homework]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      baseUrl:
+        description: Base URL of the application under test
+        type: string
+        default: https://github.com
+      browserSize:
+        description: Browser window size
+        type: string
+        default: 1920x1080
+      timeout:
+        description: Selenide element timeout, ms
+        type: string
+        default: "10000"
+
+# Read-only token; no secrets are used, so fork PRs (pull_request event) get nothing extra.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ui-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      ALLURE_VERSION: 2.46.1
+      # sha256 of allure-commandline-2.46.1.zip as published on Maven Central
+      ALLURE_SHA256: d25c519bbde940dc953cff8901130ce18b73013dc19a8f8b90b8b4b1c5eb252f
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Java 21
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-provider: basic # open-source GitHub Actions cache, not the commercial default
+
+      - name: Install Chrome and matching ChromeDriver
+        id: chrome
+        uses: browser-actions/setup-chrome@48ad923757ca74d66703209fe939badbdf80f2f4 # v2.2.0
+        with:
+          chrome-version: stable
+          install-chromedriver: true
+          install-dependencies: true
+
+      - name: Verify Chrome / ChromeDriver versions match
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+          CHROMEDRIVER_PATH: ${{ steps.chrome.outputs.chromedriver-path }}
+        run: |
+          chrome_version=$("$CHROME_PATH" --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+          driver_version=$("$CHROMEDRIVER_PATH" --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+          echo "Chrome:       $chrome_version ($CHROME_PATH)"
+          echo "ChromeDriver: $driver_version ($CHROMEDRIVER_PATH)"
+          # ChromeDriver supports the Chrome build with the same MAJOR.MINOR.BUILD (CDP protocol matches)
+          if [ "${chrome_version%.*}" != "${driver_version%.*}" ]; then
+            echo "::error::Chrome $chrome_version and ChromeDriver $driver_version do not match"
+            exit 1
+          fi
+
+      - name: Install Allure CLI ${{ env.ALLURE_VERSION }} (SHA-256 verified)
+        run: |
+          zip="$RUNNER_TEMP/allure-commandline.zip"
+          curl -fsSL -o "$zip" \
+            "https://repo1.maven.org/maven2/io/qameta/allure/allure-commandline/${ALLURE_VERSION}/allure-commandline-${ALLURE_VERSION}.zip"
+          echo "${ALLURE_SHA256}  $zip" | sha256sum --check --strict
+          unzip -q "$zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/allure-${ALLURE_VERSION}/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/allure-${ALLURE_VERSION}/bin/allure" --version
+
+      # Separate step: a compilation error fails here, before any test runs and without a report.
+      - name: Compile tests
+        id: compile
+        run: ./gradlew testClasses
+
+      - name: Run UI tests
+        id: tests
+        env:
+          BASE_URL: ${{ inputs.baseUrl || 'https://github.com' }}
+          BROWSER_SIZE: ${{ inputs.browserSize || '1920x1080' }}
+          TIMEOUT_MS: ${{ inputs.timeout || '10000' }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+          CHROMEDRIVER_PATH: ${{ steps.chrome.outputs.chromedriver-path }}
+        # --no-sandbox: CI-only trade-off. Ubuntu 24.04 runners restrict the user namespaces that the
+        # Chrome sandbox needs. The runner VM is ephemeral and the tests only open the target site.
+        run: >
+          ./gradlew test
+          -Dbrowser=chrome
+          -Dheadless=true
+          "-DbaseUrl=$BASE_URL"
+          "-DbrowserSize=$BROWSER_SIZE"
+          "-Dtimeout=$TIMEOUT_MS"
+          "-Dselenide.browserBinary=$CHROME_PATH"
+          "-Dwebdriver.chrome.driver=$CHROMEDRIVER_PATH"
+          -Dchromeoptions.args=--no-sandbox
+
+      # "0 tests" is not a success: without results there is nothing to report.
+      - name: Check test results exist
+        id: results
+        if: always() && steps.compile.outcome == 'success'
+        run: |
+          results=$(find build/allure-results -name '*-result.json' 2>/dev/null | wc -l)
+          junit=$(find build/test-results/test -name 'TEST-*.xml' 2>/dev/null | wc -l)
+          echo "Allure results: $results, JUnit XML files: $junit"
+          if [ "$results" -eq 0 ] || [ "$junit" -eq 0 ]; then
+            echo "::error::No test results were produced"
+            exit 1
+          fi
+
+      - name: Generate Allure report
+        id: report
+        if: always() && steps.results.outcome == 'success'
+        run: allure generate --clean -o build/allure-report build/allure-results
+
+      - name: Upload JUnit XML
+        if: always() && steps.results.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: junit-xml
+          path: build/test-results/test/
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload Allure results (with attachments)
+        if: always() && steps.results.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: allure-results
+          path: build/allure-results/
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload Allure report
+        if: always() && steps.report.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: allure-report
+          path: build/allure-report/
+          retention-days: 14
+          if-no-files-found: error
