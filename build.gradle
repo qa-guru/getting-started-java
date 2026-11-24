@@ -6,17 +6,86 @@ repositories {
     mavenCentral()
 }
 
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+configurations {
+    // AspectJ weaver is used only as a -javaagent (needed for Allure @Step), not on the classpath
+    aspectjAgent
+}
+
 dependencies {
     testImplementation(
             "com.codeborne:selenide:7.18.2",
             "org.junit.jupiter:junit-jupiter:6.1.3")
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+
+    // Allure JVM adapters (write results). allure-jupiter 3.x targets JUnit 6; allure-junit5 is the old 2.x line.
+    testImplementation platform("io.qameta.allure:allure-bom:3.1.1")
+    testImplementation(
+            "io.qameta.allure:allure-jupiter",
+            "io.qameta.allure:allure-selenide")
+
+    aspectjAgent "org.aspectj:aspectjweaver:1.9.27"
 }
 
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
 
+// Only these -D properties are forwarded from the Gradle launcher to the test JVM.
+def forwardedTestProperties = [
+        'baseUrl', 'browser', 'browserSize', 'headless', 'timeout',
+        // browser binary / driver / extra Chrome flags (CI: explicit Chrome + ChromeDriver, --no-sandbox)
+        'selenide.browserBinary', 'webdriver.chrome.driver', 'chromeoptions.args',
+]
+
 test {
+    useJUnitPlatform()
+
+    forwardedTestProperties.each { name ->
+        def value = providers.systemProperty(name)
+        if (value.present) {
+            systemProperty name, value.get()
+        }
+    }
+
+    def aspectjAgent = configurations.aspectjAgent
+    inputs.files(aspectjAgent).withPropertyName('aspectjAgent').withNormalizer(ClasspathNormalizer)
+    jvmArgumentProviders.add({ ["-javaagent:${aspectjAgent.singleFile.absolutePath}".toString()] } as CommandLineArgumentProvider)
+
+    // Results dir is set in src/test/resources/allure.properties; wipe it so runs never mix.
+    def allureResults = layout.buildDirectory.dir('allure-results')
+    outputs.dir(allureResults).withPropertyName('allureResults')
+    doFirst {
+        allureResults.get().asFile.deleteDir()
+    }
+}
+
+// Telegram notifier (ci/TelegramNotifier.java): a dependency-free single-file program run by CI via
+// `java ci/TelegramNotifier.java`. It is compiled here only to unit-test it against fixtures and a mock HTTP server.
+sourceSets {
+    notifier {
+        java.srcDirs = ['ci']
+    }
+    notifierTest {
+        compileClasspath += notifier.output
+        runtimeClasspath += notifier.output
+    }
+}
+
+dependencies {
+    notifierTestImplementation "org.junit.jupiter:junit-jupiter:6.1.3"
+    notifierTestRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+tasks.register('notifierTest', Test) {
+    description = 'Unit tests for the Telegram notifier (no browser, no real Telegram).'
+    group = 'verification'
+    testClassesDirs = sourceSets.notifierTest.output.classesDirs
+    classpath = sourceSets.notifierTest.runtimeClasspath
     useJUnitPlatform()
 }

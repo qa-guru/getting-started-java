@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="tests.SearchTests" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-22T14:50:58.954Z" hostname="host" time="48.7">
+  <properties/>
+  <testcase name="impossibleStarsFilterShowsEmptyState()" classname="tests.SearchTests" time="3.7"/>
+  <testcase name="successfulSearchTest()" classname="tests.SearchTests" time="2.9"/>
+  <testcase name="searchByRepoQualifierOpensRepository()" classname="tests.SearchTests" time="41.9"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

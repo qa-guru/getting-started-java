@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="tests.SearchTests" tests="2" skipped="0" failures="1" errors="0" time="5.0">
+  <testcase name="a()" classname="tests.SearchTests" time="1.0"/>
+  <testcase name="b()" classname="tests.SearchTests" time="4.0"><failure message="x" type="AssertionError">x</failure></testcase>
+</testsuite>
